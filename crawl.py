@@ -4,6 +4,10 @@ import requests
 import json
 import sqlite3
 import time
+import multiprocessing
+import argparse
+import asyncio
+import aiohttp
 
 from util import get_user_info, get_comment_user, get_articles_id
 
@@ -16,7 +20,7 @@ def write_team_info():
     """
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36',
-        'Cookie': 'dqduid=ChM8uVrpeZitQxLPAysBAg==; Hm_lvt_662abe3e1ab2558f09503989c9076934=1525250495; sensorsdata2015jssdkcross=%7B%22distinct_id%22%3A%22163200395eeaa4-0459f11ab28432-336b7b05-1024000-163200395f0288%22%2C%22%24device_id%22%3A%22163200395eeaa4-0459f11ab28432-336b7b05-1024000-163200395f0288%22%2C%22props%22%3A%7B%22%24latest_referrer%22%3A%22%E5%8F%96%E5%80%BC%E5%BC%82%E5%B8%B8%22%2C%22%24latest_referrer_host%22%3A%22%E5%8F%96%E5%80%BC%E5%BC%82%E5%B8%B8%22%7D%7D; Hm_lpvt_662abe3e1ab2558f09503989c9076934=1525403827; laravel_session=eyJpdiI6InJJVW50dzErb1FQNWVLOGd6XC9YbEtvTk5mVkZoTUI0blpIYVEzaUN1bVQ0PSIsInZhbHVlIjoiSXVacTExaXl1aldzV1c4cXVmRTIyczl0S0RONzhHNVRGT2Z6WWFwU0d0QkZ2NlJLY3ljeG92MVFsN0xLXC92anBSMmh2bHJOMVl1MnhKZzVWbWtzYmFBPT0iLCJtYWMiOiIxZWI1NTJiY2ZhNDFkNDk5MTgyYzgxOTQwNWVkYWM4YjJjMTEzZGNkZTUwODc1MTJhMDViMTMyN2NhNmVkOTZmIn0%3D'
+        'Cookie': 'laravel_session=eyJpdiI6ImtucXJlaTdDdnlCWHJOaDl6Q3pnNlZkcUgxU0FpVE5IZDBuWGt1a3pha2c9IiwidmFsdWUiOiJNQ0ZzNXZla2hsaWtENEEraERQQW1adXFRdUdCUlBGV25MQ09SMW5jek1EV2xPaG5sV05VSGFHMUkxSDVEM1pBVWJsWFBZMUQ1SnRCQnREZlBrRUJ5dz09IiwibWFjIjoiOGE3NzY2YWE3NTlmYjIyODg5M2U4ZjBlMDc4NzU5NzgzYmM2NDIwOTY2MTU0NmI4Zjc5OTFjMWM5YmQ1YzZmMSJ9; expires=Sat, 12-May-2018 13:55:57 GMT; Max-Age=7200; path=/; domain=dongqiudi.com; httponly'
     }
 
     BASE_URL = 'http://api.dongqiudi.com'
@@ -70,7 +74,7 @@ def write_team_info():
                                                                    team.get('name', ''), team.get('id', ''),
                                                                    team.get('object_id', '')))
 
-        print('{} data finish.'.format(league_name))
+        print('{} data finish.'.format(league_name.encode(encoding='utf-8')))
 
     # 关闭Cursor:
     cursor.close()
@@ -80,39 +84,107 @@ def write_team_info():
     conn.close()
 
 
-def write_article_comment_user(page_num):
+def write_article_comment_user(page_num, obtain_article=True, multi_process=False, if_continue=False):
     """
     将前 page num 页文章的评论区的用户id写入 article_comment_user 列表。
 
     :param page_num: 前 page num 页文章
+    :param obtain_article: 是否要运行part 1来获取文章列表
+    :param multi_process: 是否启动多线程
+    :param if_continue: 是否继续上次的请求
     :return:
     """
     tic = time.time()
     # --------------------- 1. 获取文章id列表 ---------------------
-    article_id_dict = get_articles_id(page_num)
-    article_id_list = list(article_id_dict.values())
-    # flatten
-    article_id_list = [y for x in article_id_list for y in x]
+    if obtain_article:
+        article_id_dict = get_articles_id(page_num)
+        article_id_list = list(article_id_dict.values())
+        # flatten
+        article_id_list = [y for x in article_id_list for y in x]
 
-    print(f'Article id list obtained, there are total {len(article_id_list)} articles.')
+        print(f'Article id list obtained, there are total {len(article_id_list)} articles.')
+
+        with open('article_id.txt', 'wb') as F:
+            F.write(str(article_id_list).encode(encoding='utf-8'))
 
     toc1 = time.time()
 
     print(f'Part 1 costs time: {toc1 - tic} second.')
 
     # --------------------- 2. 获取各文章下的用户id列表 ---------------------
-    user_id_list = list()
+    # 数据库
+    conn = sqlite3.connect('data.db')
+    cursor = conn.cursor()
 
+    # 如果不是继续上次的，就清空表
+    if not if_continue:
+        cursor.execute("select * from sqlite_master where type = 'table' and name = 'article_comment_user'")
+        value = cursor.fetchall()
+        if value:
+            cursor.execute('DROP TABLE article_comment_user')
+
+        cursor.execute('CREATE TABLE article_comment_user (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, '
+                       'article_id VARCHAR(20), user_id_set VARCHAR(10000))')
+
+    user_id_list = list()
     count = 0
     total_users = 0
-    for article_id in article_id_list:
-        user_set = get_comment_user(article_id)
-        user_id_list.append([article_id, str(user_set)])
 
-        count += 1
-        total_users += len(user_set)
-        if count % 10 == 0:
-            print(f'{count} articles have been processed, there are total {total_users} users.')
+    with open('article_id.txt', 'rb') as F:
+        d = F.readlines()
+        article_id_list = eval(d[0])
+
+    with open('crawled_article_id.txt', 'rb') as F:
+        d = F.readlines()
+        crawled_article_id_list = eval(d[0])
+
+    article_id_list = list(set(article_id_list) - set(crawled_article_id_list))
+
+    # 单进程
+    if not multi_process:
+        for article_id in article_id_list:
+            user_set = get_comment_user(article_id)
+            user_id_list.append([article_id, str(user_set)])
+            crawled_article_id_list.append(article_id)
+
+            count += 1
+            total_users += len(user_set)
+            if count % 20 == 0:
+                print(f'{count} articles have been processed, there are total {total_users} users.')
+
+            if count % 1000 == 0:
+                # 将当前数据写入数据库
+                cursor.executemany(f"INSERT INTO article_comment_user (article_id, user_id_set) VALUES (?, ?)",
+                                   user_id_list)
+
+                cursor.close()
+                conn.commit()
+
+                user_id_list = list()
+                cursor = conn.cursor()
+
+                with open('crawled_article_id.txt', 'wb') as F:
+                    F.write(str(crawled_article_id_list).encode(encoding='utf-8'))
+
+    else:
+        # 多进程
+        pool = multiprocessing.Pool(8)
+        for article_id in article_id_list:
+            result = pool.apply_async(get_comment_user, (article_id,))
+            user_set = result.get()
+            user_id_list.append([article_id, str(user_set)])
+
+            count += 1
+            total_users += len(user_set)
+            if count % 10 == 0:
+                print(f'{count} articles have been processed, there are total {total_users} users.')
+
+        pool.close()
+        pool.join()
+
+        # loop = asyncio.get_event_loop()
+        # loop.run_until_complete(async_get_comment_user(loop, article_id_list))
+        # loop.close()
 
     print(f'User id set obtained, there are total {total_users} users.')
 
@@ -121,21 +193,12 @@ def write_article_comment_user(page_num):
     print(f'Part 2 costs time: {toc2 - toc1} second.')
 
     # --------------------- 3. 写入数据库 ---------------------
-    conn = sqlite3.connect('data.db')
-
-    cursor = conn.cursor()
-    cursor.execute("select * from sqlite_master where type = 'table' and name = 'article_comment_user'")
-    value = cursor.fetchall()
-    if value:
-        cursor.execute('DROP TABLE article_comment_user')
-
-    cursor.execute('CREATE TABLE article_comment_user (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, '
-                   'article_id VARCHAR(20), user_id_set VARCHAR(10000))')
 
     cursor.executemany(f"INSERT INTO article_comment_user (article_id, user_id_set) VALUES (?, ?)", user_id_list)
 
     cursor.close()
     conn.commit()
+
     conn.close()
 
     toc3 = time.time()
@@ -143,10 +206,12 @@ def write_article_comment_user(page_num):
     print(f'Part 3 costs time: {toc3 - toc2} second.')
 
 
-def write_user_info():
-    tic = time.time()
+def write_user_list():
+    """
+    将带爬取的用户id列表写入 user_id_set.txt 。
 
-    # 1. 先读取user id列表，并去重
+    :return:
+    """
     conn = sqlite3.connect('data.db')
 
     cursor = conn.cursor()
@@ -160,25 +225,58 @@ def write_user_info():
 
     print(f'There are {len(user_id_set)} users in total.')
 
+    cursor.close()
+    conn.commit()
+    conn.close()
+
+    with open('user_id_set.txt', 'wb') as F:
+        F.write(str(list(user_id_set)).encode(encoding='utf-8'))
+
+
+def write_user_info(begin, end):
+    tic = time.time()
+
+    # 1. 先读取user id列表
+    conn = sqlite3.connect('data.db')
+
+    cursor = conn.cursor()
+    # cursor.execute('select * from article_comment_user')
+    # value = cursor.fetchall()
+    #
+    # user_id_set = set()
+    # for x in value:
+    #     d = eval(x[2])
+    #     user_id_set.update(d)
+    #
+    # print(f'There are {len(user_id_set)} users in total.')
+
+    with open('user_id_set.txt', 'rb') as F:
+        d = F.readlines()
+        res = eval(d[0])
+        user_id_set = set(res[begin: end])
+
     toc1 = time.time()
     print(f'Part 1 finish, cost time {toc1 - tic} second.')
 
     # 2. 获取用户信息，写入user表
-    cursor.execute("select * from sqlite_master where type = 'table' and name = 'user'")
-    value = cursor.fetchall()
-    if value:
-        cursor.execute('DROP TABLE user')
-
-    cursor.execute('CREATE TABLE user (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, user_id VARCHAR(20), '
-                   'user_name VARCHAR(50), gender VARCHAR(10), created_at VARCHAR(30), region_id INTEGER, '
-                   'region_phrase VARCHAR(15), team_id VARCHAR(10), introduction VARCHAR(20), timeline_total INTEGER, '
-                   'post_total INTEGER, reply_total INTEGER, up_total VARCHAR(10), following_total VARCHAR(10), '
-                   'followers_total VARCHAR(10))')
+    # cursor.execute("select * from sqlite_master where type = 'table' and name = 'user'")
+    # value = cursor.fetchall()
+    # if value:
+    #     cursor.execute('DROP TABLE user')
+    #
+    # cursor.execute('CREATE TABLE user (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, user_id VARCHAR(20), '
+    #                'user_name VARCHAR(50), gender VARCHAR(10), created_at VARCHAR(30), region_id INTEGER, '
+    #                'region_phrase VARCHAR(15), team_id VARCHAR(10), introduction VARCHAR(20), timeline_total INTEGER, '
+    #                'post_total INTEGER, reply_total INTEGER, up_total VARCHAR(10), following_total VARCHAR(10), '
+    #                'followers_total VARCHAR(10))')
 
     insert_data = list()
     count = 0
     for user_id in user_id_set:
-        user_info = get_user_info(user_id)
+        try:
+            user_info = get_user_info(user_id)
+        except:
+            continue
         insert_data.append(user_info)
 
         count += 1
@@ -198,12 +296,32 @@ def write_user_info():
     print(f'Part 2 costs time: {toc2 - toc1} second.')
 
 
+def async_write_user_info():
+    """
+    异步爬取用户信息。
+
+    :return:
+    """
+    pass
+
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Parse arguments.')
+    parser.add_argument('--begin',  type=int, default=0,
+                        help='begin index')
+    parser.add_argument('--end',  type=int, default=610803,
+                        help='end index')
+
+    args = parser.parse_args()
 
     # 获取球队信息，写入 team 表
-    # write_team_info()
+    write_team_info()
 
-    # write_article_comment_user(100)
+    # write_article_comment_user(5000, obtain_article=False, multi_process=False, if_continue=True)
 
-    write_user_info()
+    # write_user_list()
+
+    # write_user_info(args.begin, args.end)
+
+    # async_write_user_info()
 

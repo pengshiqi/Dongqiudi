@@ -4,6 +4,7 @@ import requests
 import json
 import sqlite3
 import time
+import asyncio
 
 from pprint import pprint
 
@@ -38,6 +39,9 @@ def get_articles_id(page_num):
 
         next_url = data['next']
 
+        if i % 25 == 0:
+            print(f'{i} pages of articles have been obtained.')
+
     # pprint(id_dict)
 
     return id_dict
@@ -55,8 +59,14 @@ def get_comment_user(article_id):
     }
     BASE_URL = 'http://api.dongqiudi.com/v2/article/{}/comment?sort=down&version=600'
 
-    r = requests.get(url=BASE_URL.format(article_id), headers=headers)
-    data = json.loads(r.text)
+    try:
+        r = requests.get(url=BASE_URL.format(article_id), headers=headers, timeout=10)
+        data = json.loads(r.text)
+    except:
+        data = {'data': {}}
+
+    if 'data' not in data.keys():
+        return set([])
 
     user_list = list()
     for user in data['data'].get('user_list', []):
@@ -65,9 +75,14 @@ def get_comment_user(article_id):
     next_url = data['data'].get('next', '')
 
     while next_url:
-        r = requests.get(url=next_url, headers=headers)
+        try:
+            r = requests.get(url=next_url, headers=headers, timeout=10)
+            data = json.loads(r.text)
+        except:
+            data = {'data': {}}
 
-        data = json.loads(r.text)
+        if 'data' not in data.keys():
+            break
 
         for user in data['data'].get('user_list', []):
             user_list.append(user.get('id', ''))
