@@ -2,11 +2,7 @@
 
 import requests
 import json
-import sqlite3
 import time
-import asyncio
-
-from pprint import pprint
 
 
 def get_articles_id(page_num):

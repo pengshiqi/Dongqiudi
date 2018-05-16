@@ -6,8 +6,6 @@ import sqlite3
 import time
 import multiprocessing
 import argparse
-import asyncio
-import aiohttp
 
 from util import get_user_info, get_comment_user, get_articles_id
 
@@ -18,6 +16,8 @@ def write_team_info():
 
     :return:
     """
+
+    # 使用时需要将 Cookie 替换。
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36',
         'Cookie': 'laravel_session=eyJpdiI6ImtucXJlaTdDdnlCWHJOaDl6Q3pnNlZkcUgxU0FpVE5IZDBuWGt1a3pha2c9IiwidmFsdWUiOiJNQ0ZzNXZla2hsaWtENEEraERQQW1adXFRdUdCUlBGV25MQ09SMW5jek1EV2xPaG5sV05VSGFHMUkxSDVEM1pBVWJsWFBZMUQ1SnRCQnREZlBrRUJ5dz09IiwibWFjIjoiOGE3NzY2YWE3NTlmYjIyODg5M2U4ZjBlMDc4NzU5NzgzYmM2NDIwOTY2MTU0NmI4Zjc5OTFjMWM5YmQ1YzZmMSJ9; expires=Sat, 12-May-2018 13:55:57 GMT; Max-Age=7200; path=/; domain=dongqiudi.com; httponly'
@@ -182,10 +182,6 @@ def write_article_comment_user(page_num, obtain_article=True, multi_process=Fals
         pool.close()
         pool.join()
 
-        # loop = asyncio.get_event_loop()
-        # loop.run_until_complete(async_get_comment_user(loop, article_id_list))
-        # loop.close()
-
     print(f'User id set obtained, there are total {total_users} users.')
 
     toc2 = time.time()
@@ -240,15 +236,6 @@ def write_user_info(begin, end):
     conn = sqlite3.connect('data.db')
 
     cursor = conn.cursor()
-    # cursor.execute('select * from article_comment_user')
-    # value = cursor.fetchall()
-    #
-    # user_id_set = set()
-    # for x in value:
-    #     d = eval(x[2])
-    #     user_id_set.update(d)
-    #
-    # print(f'There are {len(user_id_set)} users in total.')
 
     with open('user_id_set.txt', 'rb') as F:
         d = F.readlines()
@@ -259,16 +246,6 @@ def write_user_info(begin, end):
     print(f'Part 1 finish, cost time {toc1 - tic} second.')
 
     # 2. 获取用户信息，写入user表
-    # cursor.execute("select * from sqlite_master where type = 'table' and name = 'user'")
-    # value = cursor.fetchall()
-    # if value:
-    #     cursor.execute('DROP TABLE user')
-    #
-    # cursor.execute('CREATE TABLE user (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, user_id VARCHAR(20), '
-    #                'user_name VARCHAR(50), gender VARCHAR(10), created_at VARCHAR(30), region_id INTEGER, '
-    #                'region_phrase VARCHAR(15), team_id VARCHAR(10), introduction VARCHAR(20), timeline_total INTEGER, '
-    #                'post_total INTEGER, reply_total INTEGER, up_total VARCHAR(10), following_total VARCHAR(10), '
-    #                'followers_total VARCHAR(10))')
 
     insert_data = list()
     count = 0
@@ -296,15 +273,6 @@ def write_user_info(begin, end):
     print(f'Part 2 costs time: {toc2 - toc1} second.')
 
 
-def async_write_user_info():
-    """
-    异步爬取用户信息。
-
-    :return:
-    """
-    pass
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Parse arguments.')
     parser.add_argument('--begin',  type=int, default=0,
@@ -323,5 +291,4 @@ if __name__ == '__main__':
 
     # write_user_info(args.begin, args.end)
 
-    # async_write_user_info()
 

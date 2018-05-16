@@ -1,0 +1,4 @@
+pyecharts
+requests
+jieba
+echarts-countries-pypkg

@@ -1,8 +1,6 @@
 # -*- coding:utf-8 -*-
 
-import json
 import sqlite3
-import time
 import datetime
 
 import jieba
@@ -12,6 +10,17 @@ from pyecharts.engine import create_default_environment
 
 
 def process_league_data(league_name, cursor, data, env, figure_type='pie', limit=None):
+    """
+    画某个联赛的饼图。
+
+    :param league_name: 联赛名
+    :param cursor:
+    :param data:
+    :param env:
+    :param figure_type: pie 饼图， bar 柱状图
+    :param limit: 画柱状图时的俱乐部数量
+    :return: None
+    """
     # 先获取球队id和名字对应关系字典
     if league_name == '俱乐部':
         cursor.execute("SELECT * FROM team where league != '国家队'")
@@ -32,6 +41,7 @@ def process_league_data(league_name, cursor, data, env, figure_type='pie', limit
             else:
                 team_dict[x[7]] = 1
 
+    # 排序
     team_list = [(k, v) for k, v in team_dict.items()]
     team_list = sorted(team_list, key=lambda x: x[1], reverse=True)
 
@@ -57,7 +67,13 @@ def process_league_data(league_name, cursor, data, env, figure_type='pie', limit
     print('-----------------------------------------------------------------------------------')
 
 
-def count(calculate_word_cloud=True):
+def analyse(calculate_word_cloud=True):
+    """
+    分析 data.db -> user 的用户数据。
+
+    :param calculate_word_cloud: 是否计算词云，这个比较花费时间。
+    :return:
+    """
     conn = sqlite3.connect('data.db')
 
     cursor = conn.cursor()
@@ -214,12 +230,11 @@ def count(calculate_word_cloud=True):
         value_list = [(k, v) for k, v in word_dict.items()]
         value_list = sorted(value_list, key=lambda x: x[1], reverse=True)
 
+        # 去掉单字
         attr = [x[0] for x in value_list if len(x[0]) > 1]
         value = [x[1] for x in value_list if len(x[0]) > 1]
 
-        # attr = [x[0] for x in value_list]
-        # value = [x[1] for x in value_list]
-
+        # 取 top 100
         attr = attr[:100]
         value = value[:100]
 
@@ -248,9 +263,6 @@ def count(calculate_word_cloud=True):
     t = datetime.datetime(2018, 5, 12)
     attr = [t - datetime.timedelta(days=x) for x in attr]
     attr = [f'{x.year}-{x.month}-{x.day}' for x in attr]
-
-    print(attr[:10])
-    print(v[:10])
 
     bar = Bar(f"加入时间")
     bar.add("", attr, v, is_stack=True)
@@ -311,4 +323,4 @@ def count(calculate_word_cloud=True):
 
 
 if __name__ == '__main__':
-    count(calculate_word_cloud=False)
+    analyse(calculate_word_cloud=False)
