@@ -19,7 +19,7 @@
 
 所有数据存储在本地的sqlite3数据库中。
 
-使用PyEcharts来进行数据可视化，其中分词部分使用**[jieba](https://github.com/fxsjy/jieba)**。
+使用PyEcharts来进行数据可视化，其中分词部分使用[jieba](https://github.com/fxsjy/jieba)。
 
 ----
 
