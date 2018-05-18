@@ -8,10 +8,10 @@
 
 首先使用 **软件Charles** 抓包懂球帝App的各个API:
 
-1. 球队信息API： http://api.dongqiudi.com/catalogs 和  http://api.dongqiudi.com/catalog/channels/{id}
+1. 球队信息API： http://api.dongqiudi.com/catalogs 和  http://api.dongqiudi.com/catalog/channels/{league_id}
 2. 获取 Article ID 的 API: http://api.dongqiudi.com/app/tabs/iphone/1.json
 3. 获取评论用户的API： http://api.dongqiudi.com/v2/article/{article_id}/comment?sort=down&version=600
-4. 获取用户信息的API：https://api.dongqiudi.com/users/profile/{}
+4. 获取用户信息的API：https://api.dongqiudi.com/users/profile/{user_id}
 
 先获取最近5000页的10w篇article，然后获取这些article评论区的用户，再爬取这些用户的个人数据。
 
