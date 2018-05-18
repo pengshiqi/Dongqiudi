@@ -6,7 +6,7 @@
 
 **技术栈：**
 
-首先使用 **软件Charlse** 抓包懂球帝App的各个API:
+首先使用 **软件Charles** 抓包懂球帝App的各个API:
 
 1. 球队信息API： http://api.dongqiudi.com/catalogs 和  http://api.dongqiudi.com/catalog/channels/{id}
 2. 获取 Article ID 的 API: http://api.dongqiudi.com/app/tabs/iphone/1.json
